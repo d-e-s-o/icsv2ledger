@@ -828,10 +828,13 @@ def main():
     possible_tags = set([])
     md5sum_hashes = set()
     csv_comments = set()
+    ledger_content = ""
     if options.ledger_file:
         possible_accounts = accounts_from_ledger(options.ledger_file, options.ledger_binary)
         possible_payees = payees_from_ledger(options.ledger_file, options.ledger_binary)
         csv_comments, md5sum_hashes = csv_md5sum_from_ledger(options.ledger_file)
+        with open(options.ledger_file) as f:
+            ledger_content = f.read()
 
     # Read mappings
     mappings = []
@@ -961,15 +964,6 @@ def main():
                 if options.clear_screen:
                     print('\033[2J\033[;H')
                 print('\n' + entry.prompt())
-                if (options.skip_dupes or options.confirm_dupes) and entry.md5sum in md5sum_hashes:
-                    value = 'Y'
-                    # if interactive flag was passed prompt user before skipping transaction
-                    if options.confirm_dupes:
-                        yn_response = prompt_for_value('Duplicate transaction detected, skip?', possible_yesno, 'Y')
-                        if yn_response:
-                            value = yn_response
-                    if value.upper().strip() not in ('N','NO'):
-                        continue
                 while True:
                     payee, account, tags = get_payee_and_account(entry)
                     value = 'C'
@@ -988,13 +982,31 @@ def main():
                         else:
                             continue
                     else:
-                        # add md5sum of new entry, this helps detect duplicate entries in same file
-                        md5sum_hashes.add(entry.md5sum)
                         break
                 if value.upper().strip() in ('S','SKIP'):
                     continue
 
-                yield entry.journal_entry(i + 1, payee, account, tags)
+                entry_formated = entry.journal_entry(i + 1, payee, account, tags)
+                # Note that by just checking against ledger_content as
+                # loaded once we cannot handle cases where imports in
+                # themselves are dupes of each other.
+                if (options.skip_dupes or options.confirm_dupes) and \
+                    ((entry.md5sum in md5sum_hashes) or
+                     (entry_formated in ledger_content)):
+                    value = 'Y'
+                    # if interactive flag was passed prompt user before skipping transaction
+                    if options.confirm_dupes:
+                        yn_response = prompt_for_value('Duplicate transaction detected, skip?', possible_yesno, 'Y')
+                        if yn_response:
+                            value = yn_response
+                    if value.upper().strip() not in ('N','NO'):
+                        continue
+
+                if options.entry_review:
+                    # add md5sum of new entry, this helps detect duplicate entries in same file
+                    md5sum_hashes.add(entry.md5sum)
+
+                yield entry_formated
 
     try:
         process_input_output(options.infile, options.outfile)
