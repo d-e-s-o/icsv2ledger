@@ -851,6 +851,8 @@ def main():
         possible_tags.update(set(m[3]))
 
     def get_payee_and_account(entry):
+        if options.mapping_file:
+            mappings = read_mapping_file(options.mapping_file)
         payee = entry.desc
         account = options.default_expense
         tags = []
